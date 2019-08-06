@@ -14,17 +14,18 @@ import matplotlib.pyplot as plt
 # IMPORT AND DROP
 # Restaurants
 restaurants_df = pd.read_csv('./geoplaces2.csv')
-restaurants_df.set_index(['placeID']).drop(columns=['the_geom_meter','address','country','fax','zip','smoking_area','url','Rambience','franchise','area','other_services'])
+restaurants_df = restaurants_df.set_index(['placeID']).drop(columns=['the_geom_meter','address','country','fax','zip','smoking_area','url','Rambience','franchise','area','other_services'])
 res_accepted_pay = pd.read_csv('./chefmozaccepts.csv')
 res_parking = pd.read_csv('./chefmozparking.csv')
 # Users
 user_df = pd.read_csv('./userprofile.csv')
-user_df.set_index(['userID']).drop(columns=['smoker','ambience','hijos','marital_status','birth_year','interest','personality','religion','activity','color','weight','height'])
+user_df = user_df.set_index(['userID']).drop(columns=['smoker','ambience','hijos','marital_status','birth_year','interest','personality','religion','activity','color','weight','height'])
 usr_payment = pd.read_csv('./userpayment.csv')
 # Ratings
-# (userID, placeID, rating)
+# {userID*, placeID*, rating} (* means key)
 ratings_df = pd.read_csv('./rating_final.csv')
 ratings_df = ratings_df.drop(columns=['food_rating', 'service_rating'])
+ratings_df = ratings_df.set_index(['userID', 'placeID'])
 
 # MAPPING AND ENCODING (OHE)
 
@@ -75,7 +76,13 @@ res_parking = res_parking[['placeID']].join(pd.get_dummies(res_parking['parking'
 # {userID*, 'latitude', 'longitude', 'drink_level', 'dress_preference', 'transport', 'budget', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card'}
 user_df = pd.merge(user_df, usr_payment, how='left', on=['userID'])
 # Restaurants
-# 
+# {placeID*,'latitude', 'longitude', 'name', 'city', 'state', 'alcohol', 'dress_code', 'accessibility', 'price', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes'}
 restaurants_df = pd.merge(restaurants_df, res_accepted_pay, how='left', on=['placeID'])
 restaurants_df = pd.merge(restaurants_df, res_parking, how='left', on=['placeID'])
+# Map restaurant feature values
+restaurants_df.alcohol = restaurants_df.alcohol.map({'No_Alcohol_Served':1,'Wine-Beer':2,'Full_Bar':3})
+restaurants_df.dress_code = restaurants_df.dress_code.map({'informal':1,'casual':2,'formal':3})
+restaurants_df.accessibility = restaurants_df.accessibility.map({'no_accessibility':1,'completely':2,'partially':3})
+restaurants_df.price = restaurants_df.price.map({'low': 2, 'medium': 1, 'high': 3})
 # At this point, ratings_df, user_df and restaurants_df are clean
+

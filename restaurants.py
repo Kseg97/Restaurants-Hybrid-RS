@@ -82,14 +82,14 @@ user_df = pd.merge(user_df, usr_payment, how='left', on=['userID'])
 restaurants_df = pd.merge(restaurants_df, res_accepted_pay, how='left', on=['placeID'])
 restaurants_df = pd.merge(restaurants_df, res_parking, how='left', on=['placeID'])
 # Map restaurant feature values
-restaurants_df.alcohol = restaurants_df.alcohol.map({'No_Alcohol_Served':1,'Wine-Beer':2,'Full_Bar':3})
-restaurants_df.dress_code = restaurants_df.dress_code.map({'informal':1,'casual':2,'formal':3})
-restaurants_df.accessibility = restaurants_df.accessibility.map({'no_accessibility':1,'completely':2,'partially':3})
-restaurants_df.price = restaurants_df.price.map({'low': 2, 'medium': 1, 'high': 3})
+restaurants_df = restaurants_df.join(pd.get_dummies(restaurants_df['alcohol']).add_prefix('ALCOHOL_')).groupby('placeID').max().drop(columns=['alcohol'])
+restaurants_df = restaurants_df.join(pd.get_dummies(restaurants_df['dress_code']).add_prefix('DRESS_CODE_')).groupby('placeID').max().drop(columns=['dress_code'])
+restaurants_df = restaurants_df.join(pd.get_dummies(restaurants_df['accessibility']).add_prefix('ACCESSIBILITY_')).groupby('placeID').max().drop(columns=['accessibility'])
+restaurants_df = restaurants_df.join(pd.get_dummies(restaurants_df['price']).add_prefix('PRICE_')).groupby('placeID').max().drop(columns=['price'])
 
 # At this point, ratings_df, user_df and restaurants_df are clean
 ratings_df.head()
-restaurants_df.head()
+print(list(restaurants_df.head()))
 user_df.head()
 
 ratings_df = ratings_df.reset_index()
@@ -151,7 +151,7 @@ class ModelEvaluator:
         person_recs_df = model.recommend_items(person_id, 
                                                items_to_ignore=get_items_interacted(person_id, 
                                                                                     ratings_train_indexed_df), 
-                                               topn=1000)
+                                               topn=100)
 
         hits_at_5_count = 0
         hits_at_10_count = 0
@@ -238,7 +238,7 @@ class PopularityRecommender:
 
             recommendations_df = recommendations_df.merge(self.items_df, how = 'left', 
                                                           left_on = 'placeID', 
-                                                          right_on = 'placeID')[['rating', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'alcohol', 'dress_code', 'accessibility', 'price', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes']]
+                                                          right_on = 'placeID')[['rating', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes', 'ALCOHOL_Full_Bar', 'ALCOHOL_No_Alcohol_Served', 'ALCOHOL_Wine-Beer', 'DRESS_CODE_casual', 'DRESS_CODE_formal', 'DRESS_CODE_informal', 'ACCESSIBILITY_completely', 'ACCESSIBILITY_no_accessibility', 'ACCESSIBILITY_partially', 'PRICE_high', 'PRICE_low', 'PRICE_medium']]
         
         return recommendations_df
     
@@ -260,8 +260,11 @@ content_matrix = restaurants_df.set_index('placeID').fillna(0).drop(columns=['na
 def get_person_items(person_id):
     items_per_person_list = list(ratings_df[ratings_df['userID']==person_id]['placeID'])
     item_list = restaurants_df.set_index('placeID').loc[items_per_person_list]
+    item_list['userID'] = person_id
     item_list_cleaned = item_list.fillna(0).drop(columns=['name','city','state'])
     # TODO: Instead of a list, a profile with (1x18) shape should be returned as concensus of all user-rated items
+    item_list_cleaned = item_list_cleaned.groupby(['userID']).mean()
+
     return item_list_cleaned
 
 class ContentBasedRecommender:
@@ -292,7 +295,7 @@ class ContentBasedRecommender:
         # Remove user alrealy interacted items
         # user_interacted_items = get_person_items(user_id).index.values
         # similar_items_filtered = list(filter(lambda x: x[0] not in user_interacted_items, similar_items))
-        similar_items_filtered = list(set(similar_items_filtered))
+        # similar_items_filtered = list(set(similar_items_filtered))
         recommendations_df = pd.DataFrame(similar_items_filtered, columns=['placeID', 'recStrength']).head(topn)
 
         if verbose:
@@ -301,7 +304,7 @@ class ContentBasedRecommender:
 
             recommendations_df = recommendations_df.merge(self.items_df, how = 'left', 
                                                           left_on = 'placeID', 
-                                                          right_on = 'placeID')[['recStrength', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'alcohol', 'dress_code', 'accessibility', 'price', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes']]
+                                                          right_on = 'placeID')[['recStrength', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes', 'ALCOHOL_Full_Bar', 'ALCOHOL_No_Alcohol_Served', 'ALCOHOL_Wine-Beer', 'DRESS_CODE_casual', 'DRESS_CODE_formal', 'DRESS_CODE_informal', 'ACCESSIBILITY_completely', 'ACCESSIBILITY_no_accessibility', 'ACCESSIBILITY_partially', 'PRICE_high', 'PRICE_low', 'PRICE_medium']]
 
         return recommendations_df
     
@@ -374,7 +377,7 @@ class CFRecommender:
 
             recommendations_df = recommendations_df.merge(self.items_df, how = 'left', 
                                                           left_on = 'placeID', 
-                                                          right_on = 'placeID')[['recStrength', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'alcohol', 'dress_code', 'accessibility', 'price', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes']]
+                                                          right_on = 'placeID')[['recStrength', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes', 'ALCOHOL_Full_Bar', 'ALCOHOL_No_Alcohol_Served', 'ALCOHOL_Wine-Beer', 'DRESS_CODE_casual', 'DRESS_CODE_formal', 'DRESS_CODE_informal', 'ACCESSIBILITY_completely', 'ACCESSIBILITY_no_accessibility', 'ACCESSIBILITY_partially', 'PRICE_high', 'PRICE_low', 'PRICE_medium']]
 
         return recommendations_df
     
@@ -429,7 +432,7 @@ class HybridRecommender:
 
             recommendations_df = recommendations_df.merge(self.items_df, how = 'left', 
                                                           left_on = 'placeID', 
-                                                          right_on = 'placeID')[['recStrengthHybrid', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'alcohol', 'dress_code', 'accessibility', 'price', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes']]
+                                                          right_on = 'placeID')[['recStrengthHybrid', 'placeID', 'latitude', 'longitude', 'name', 'city', 'state', 'PAYMENT_cash', 'PAYMENT_credit_card', 'PAYMENT_debit_card', 'PAYMENT_other', 'PARKING_no', 'PARKING_street', 'PARKING_yes', 'ALCOHOL_Full_Bar', 'ALCOHOL_No_Alcohol_Served', 'ALCOHOL_Wine-Beer', 'DRESS_CODE_casual', 'DRESS_CODE_formal', 'DRESS_CODE_informal', 'ACCESSIBILITY_completely', 'ACCESSIBILITY_no_accessibility', 'ACCESSIBILITY_partially', 'PRICE_high', 'PRICE_low', 'PRICE_medium']]
 
         return recommendations_df
     
